@@ -3,42 +3,47 @@
 /**
  * Plugin Name: BuzzBoost Submissions for Contact Form 7 (Admin-Only)
  * Description: Saves Contact Form 7 submissions into a private, admin-only post type with CSV export. No front-end output.
- * Version: 1.4.1
+ * Version: 1.4.2
  * Author: BuzzBoost Digital
  * Text Domain: buzzboost-cf7-admin
  * Domain Path: /languages
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
+ * Update URI: https://github.com/SolRudd/buzzboost-cf7-admin
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('BBD_CF7_ADMIN_VERSION', '1.4.1');
+define('BBD_CF7_ADMIN_VERSION', '1.4.2');
 
 /** I18N loader (optional .pot later) */
 add_action('plugins_loaded', function () {
     load_plugin_textdomain('buzzboost-cf7-admin', false, dirname(plugin_basename(__FILE__)) . '/languages');
 });
 
-/** Optional: Auto-updates via GitHub using Plugin Update Checker if present */
+/** Optional: Auto-updates via GitHub using Plugin Update Checker (PUC v5.6) */
 add_action('init', function () {
     if (!is_admin()) return;
 
     $loader = __DIR__ . '/includes/plugin-update-checker/load-v5p6.php';
     if (file_exists($loader)) {
         require $loader;
+        // Public repo updates:
         $updateChecker = Puc_v5p6_Factory::buildUpdateChecker(
             'https://github.com/SolRudd/buzzboost-cf7-admin',
             __FILE__,
             'buzzboost-cf7-admin'
         );
         $updateChecker->setBranch('main');
-        // If you ever make the repo private, add a token in wp-config.php and:
+
+        // If you ever make the repo private, add a token to wp-config.php:
+        // define('BBD_CF7_GITHUB_TOKEN', 'YOUR_TOKEN_HERE');
         // if (defined('BBD_CF7_GITHUB_TOKEN')) $updateChecker->setAuthentication(BBD_CF7_GITHUB_TOKEN);
         // $updateChecker->getVcsApi()->enableReleaseAssets(); // if you publish release ZIPs
     }
 });
-
 
 /** Gentle notice if CF7 missing (does not break) */
 add_action('admin_init', function () {
