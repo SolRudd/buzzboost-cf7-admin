@@ -22,21 +22,23 @@ add_action('plugins_loaded', function () {
 
 /** Optional: Auto-updates via GitHub using Plugin Update Checker if present */
 add_action('init', function () {
-    if (is_admin()) {
-        $puc = __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.php';
-        if (file_exists($puc)) {
-            require $puc;
-            // Set your public GitHub repo URL here:
-            $updateChecker = Puc_v4_Factory::buildUpdateChecker(
-                'https://github.com/BuzzBoostDigital/buzzboost-cf7-admin',
-                __FILE__,
-                'buzzboost-cf7-admin'
-            );
-            $updateChecker->setBranch('main'); // or 'stable'
-            // For private repos: $updateChecker->setAuthentication('YOUR_GITHUB_TOKEN');
-        }
+    if (!is_admin()) return;
+
+    $loader = __DIR__ . '/includes/plugin-update-checker/load-v5p6.php';
+    if (file_exists($loader)) {
+        require $loader;
+        $updateChecker = Puc_v5p6_Factory::buildUpdateChecker(
+            'https://github.com/SolRudd/buzzboost-cf7-admin',
+            __FILE__,
+            'buzzboost-cf7-admin'
+        );
+        $updateChecker->setBranch('main');
+        // If you ever make the repo private, add a token in wp-config.php and:
+        // if (defined('BBD_CF7_GITHUB_TOKEN')) $updateChecker->setAuthentication(BBD_CF7_GITHUB_TOKEN);
+        // $updateChecker->getVcsApi()->enableReleaseAssets(); // if you publish release ZIPs
     }
 });
+
 
 /** Gentle notice if CF7 missing (does not break) */
 add_action('admin_init', function () {
