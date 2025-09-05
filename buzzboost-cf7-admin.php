@@ -2,35 +2,46 @@
 
 /**
  * Plugin Name: BuzzBoost Submissions for Contact Form 7 (Admin-Only)
+ * Plugin URI:  https://github.com/SolRudd/buzzboost-cf7-admin
  * Description: Saves Contact Form 7 submissions into a private, admin-only post type with CSV export. No front-end output.
- * Version: 1.4.2
- * Author: BuzzBoost Digital
+ * Version:     1.4.3
+ * Author:      BuzzBoost Digital
  * Text Domain: buzzboost-cf7-admin
  * Domain Path: /languages
- * License: GPL-2.0-or-later
+ * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Update URI: https://github.com/SolRudd/buzzboost-cf7-admin
+ * Update URI:  https://github.com/SolRudd/buzzboost-cf7-admin
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('BBD_CF7_ADMIN_VERSION', '1.4.2');
+define('BBD_CF7_ADMIN_VERSION', '1.4.3');
 
-/** I18N loader (optional .pot later) */
+/**
+ * I18N
+ */
 add_action('plugins_loaded', function () {
     load_plugin_textdomain('buzzboost-cf7-admin', false, dirname(plugin_basename(__FILE__)) . '/languages');
 });
 
-/** Optional: Auto-updates via GitHub using Plugin Update Checker (PUC v5.6) */
+/**
+ * Optional: GitHub updates via Plugin Update Checker v5.6
+ * - Fully guarded: will not fatal if files missing or other plugins load PUC first.
+ * - Kill switch: define('BBD_CF7_DISABLE_PUC', true) in wp-config.php to disable.
+ */
 add_action('init', function () {
     if (!is_admin()) return;
+    if (defined('BBD_CF7_DISABLE_PUC') && BBD_CF7_DISABLE_PUC) return;
 
-    $loader = __DIR__ . '/includes/plugin-update-checker/load-v5p6.php';
-    if (file_exists($loader)) {
+    $loader = plugin_dir_path(__FILE__) . 'includes/plugin-update-checker/load-v5p6.php';
+
+    if (is_readable($loader) && !class_exists('Puc_v5p6_Factory', false)) {
         require $loader;
-        // Public repo updates:
+    }
+
+    if (class_exists('Puc_v5p6_Factory', false)) {
         $updateChecker = Puc_v5p6_Factory::buildUpdateChecker(
             'https://github.com/SolRudd/buzzboost-cf7-admin',
             __FILE__,
@@ -38,14 +49,18 @@ add_action('init', function () {
         );
         $updateChecker->setBranch('main');
 
-        // If you ever make the repo private, add a token to wp-config.php:
-        // define('BBD_CF7_GITHUB_TOKEN', 'YOUR_TOKEN_HERE');
-        // if (defined('BBD_CF7_GITHUB_TOKEN')) $updateChecker->setAuthentication(BBD_CF7_GITHUB_TOKEN);
-        // $updateChecker->getVcsApi()->enableReleaseAssets(); // if you publish release ZIPs
+        // For private repos later:
+        // define('BBD_CF7_GITHUB_TOKEN', 'YOUR_TOKEN_HERE'); // in wp-config.php
+        // if (defined('BBD_CF7_GITHUB_TOKEN')) {
+        //     $updateChecker->setAuthentication(BBD_CF7_GITHUB_TOKEN);
+        //     // $updateChecker->getVcsApi()->enableReleaseAssets();
+        // }
     }
 });
 
-/** Gentle notice if CF7 missing (does not break) */
+/**
+ * Gentle notice if CF7 is missing
+ */
 add_action('admin_init', function () {
     if (!class_exists('WPCF7')) {
         add_action('admin_notices', function () {
@@ -54,7 +69,9 @@ add_action('admin_init', function () {
     }
 });
 
-/** Register private CPT (uses default post caps; we gate screens for admins) */
+/**
+ * Register private CPT for submissions
+ */
 function bbd_register_cf7_cpt()
 {
     $labels = array(
@@ -79,12 +96,12 @@ function bbd_register_cf7_cpt()
         'rewrite'             => false,
         'query_var'           => false,
         'show_ui'             => true,
-        'show_in_menu'        => 'bbd-cf7', // under our top-level
+        'show_in_menu'        => 'bbd-cf7',
         'show_in_admin_bar'   => false,
         'show_in_nav_menus'   => false,
-        'show_in_rest'        => false,     // no REST exposure
+        'show_in_rest'        => false,
         'menu_icon'           => 'dashicons-email-alt',
-        'capability_type'     => 'post',    // default post caps avoid meta-cap weirdness
+        'capability_type'     => 'post',
         'map_meta_cap'        => true,
         'capabilities'        => array(
             'create_posts' => 'do_not_allow', // no manual "Add New"
@@ -93,7 +110,9 @@ function bbd_register_cf7_cpt()
 }
 add_action('init', 'bbd_register_cf7_cpt');
 
-/** Top-level menu that redirects to the CPT list + Export submenu */
+/**
+ * Admin menu + Export submenu
+ */
 add_action('admin_menu', function () {
     if (!current_user_can('manage_options')) return;
 
@@ -120,11 +139,14 @@ add_action('admin_menu', function () {
     );
 }, 20);
 
-/** HARD-GATE submissions screens to Admins only */
+/**
+ * Gate submission screens to Admins only
+ */
 function bbd_gate_submission_screens()
 {
     if (!is_admin()) return;
-    $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+    if (!function_exists('get_current_screen')) return;
+    $screen = get_current_screen();
     if ($screen && in_array($screen->id, array('edit-cf7_submission', 'cf7_submission'), true)) {
         if (!current_user_can('manage_options')) {
             wp_die(__('Sorry, you are not allowed to access submissions.', 'buzzboost-cf7-admin'));
@@ -135,7 +157,9 @@ add_action('load-edit.php', 'bbd_gate_submission_screens');
 add_action('load-post.php', 'bbd_gate_submission_screens');
 add_action('load-post-new.php', 'bbd_gate_submission_screens');
 
-/** Save CF7 submission after mail sent */
+/**
+ * Save CF7 submission after mail is sent
+ */
 add_action('wpcf7_mail_sent', function ($contact_form) {
     if (!class_exists('WPCF7_Submission')) return;
 
@@ -150,29 +174,28 @@ add_action('wpcf7_mail_sent', function ($contact_form) {
     $safe_map = array();
 
     foreach ($data as $key => $value) {
-        if (strpos($key, '_wpcf7') === 0 || $key === 'g-recaptcha-response' || $key === 'submit') continue;
-        $label = esc_html(ucwords(str_replace(array('_', '-'), ' ', $key)));
+        if (strpos((string)$key, '_wpcf7') === 0 || $key === 'g-recaptcha-response' || $key === 'submit') continue;
+        $label = esc_html(ucwords(str_replace(array('_', '-'), ' ', (string)$key)));
+
         if (is_array($value)) {
             $san = array_map('sanitize_text_field', $value);
             $post_content .= "<p><strong>{$label}:</strong><br>" . esc_html(implode(', ', $san)) . "</p>";
             $safe_map[$key] = $san;
         } else {
-            $san = sanitize_text_field($value);
+            $san = sanitize_text_field((string)$value);
             $post_content .= "<p><strong>{$label}:</strong> " . esc_html($san) . "</p>";
             $safe_map[$key] = $san;
         }
     }
 
-    // Uploaded files: list filenames in content, store absolute paths as meta
+    // Uploaded files
     $uploaded_files = $submission->uploaded_files();
     if (!empty($uploaded_files) && is_array($uploaded_files)) {
         $post_content .= '<p><strong>Uploaded Files:</strong><br>';
         foreach ($uploaded_files as $field_name => $path) {
-            if (is_array($path)) {
-                $path = reset($path);
-            }
+            if (is_array($path)) $path = reset($path);
             $filename = $path ? wp_basename($path) : '';
-            $post_content .= esc_html(ucwords(str_replace(array('_', '-'), ' ', $field_name))) . ': ' . esc_html($filename) . '<br>';
+            $post_content .= esc_html(ucwords(str_replace(array('_', '-'), ' ', (string)$field_name))) . ': ' . esc_html($filename) . '<br>';
         }
         $post_content .= '</p>';
     }
@@ -188,83 +211,88 @@ add_action('wpcf7_mail_sent', function ($contact_form) {
     update_post_meta($post_id, '_form_title', $form_title);
 
     foreach ($safe_map as $key => $val) {
-        $meta_key = '_' . sanitize_key($key);
+        $meta_key = '_' . sanitize_key((string)$key);
         if (is_array($val)) {
             update_post_meta($post_id, $meta_key, array_map('sanitize_text_field', $val));
         } else {
-            update_post_meta($post_id, $meta_key, sanitize_text_field($val));
+            update_post_meta($post_id, $meta_key, sanitize_text_field((string)$val));
         }
     }
 
     if (!empty($uploaded_files) && is_array($uploaded_files)) {
         foreach ($uploaded_files as $field_name => $path) {
-            if (is_array($path)) {
-                $path = reset($path);
-            }
-            update_post_meta($post_id, '_file_' . sanitize_key($field_name), sanitize_text_field($path));
+            if (is_array($path)) $path = reset($path);
+            update_post_meta($post_id, '_file_' . sanitize_key((string)$field_name), sanitize_text_field((string)$path));
         }
     }
 });
 
-/** Remove "View" row action to avoid front-end hits */
+/**
+ * Remove "View" action (no front-end)
+ */
 add_filter('post_row_actions', 'bbd_cf7_remove_view_action', 10, 2);
 add_filter('page_row_actions', 'bbd_cf7_remove_view_action', 10, 2);
 function bbd_cf7_remove_view_action($actions, $post)
 {
-    if ($post->post_type === 'cf7_submission') {
+    if (isset($post->post_type) && $post->post_type === 'cf7_submission') {
         unset($actions['view']);
-        unset($actions['inline hide-if-no-js']); // optional
+        unset($actions['inline hide-if-no-js']);
     }
     return $actions;
 }
 
-/** Helper: first available meta from keys */
+/**
+ * Helpers
+ */
 function bbd_cf7_first_meta($post_id, $keys)
 {
     foreach ($keys as $key) {
         $val = get_post_meta($post_id, '_' . sanitize_key($key), true);
-        if (!empty($val)) return is_array($val) ? implode(', ', $val) : $val;
+        if ($val !== '' && $val !== null) {
+            return is_array($val) ? implode(', ', array_map('strval', $val)) : $val;
+        }
     }
     return '';
 }
 
-/** Helper: prefer [first-name] + [last-name], fallback to common names */
 function bbd_cf7_guess_full_name($post_id)
 {
     $first = get_post_meta($post_id, '_first-name', true);
     $last  = get_post_meta($post_id, '_last-name', true);
-    $full  = trim($first . ' ' . $last);
+    $full  = trim((string)$first . ' ' . (string)$last);
     if ($full !== '') return $full;
     return bbd_cf7_first_meta($post_id, array('your-name', 'name', 'full_name', 'fullname', 'first-name', 'first_name', 'contact-name'));
 }
 
-/** Admin columns */
+/**
+ * Admin columns
+ */
 add_filter('manage_cf7_submission_posts_columns', function ($cols) {
     $new = array();
-    $new['cb']        = $cols['cb'];
+    $new['cb']        = isset($cols['cb']) ? $cols['cb'] : '';
     $new['title']     = __('Title', 'buzzboost-cf7-admin');
     $new['bbd_name']  = __('Name', 'buzzboost-cf7-admin');
     $new['bbd_email'] = __('Email', 'buzzboost-cf7-admin');
     $new['bbd_phone'] = __('Phone', 'buzzboost-cf7-admin');
     $new['bbd_form']  = __('Form', 'buzzboost-cf7-admin');
-    $new['date']      = $cols['date'];
+    $new['date']      = isset($cols['date']) ? $cols['date'] : __('Date', 'buzzboost-cf7-admin');
     return $new;
 });
 add_action('manage_cf7_submission_posts_custom_column', function ($col, $post_id) {
     if ($col === 'bbd_name') {
         echo esc_html(bbd_cf7_guess_full_name($post_id));
     } elseif ($col === 'bbd_email') {
-        $out = bbd_cf7_first_meta($post_id, array('your-email', 'email', 'email_address', 'contact-email'));
-        echo esc_html($out);
+        echo esc_html(bbd_cf7_first_meta($post_id, array('your-email', 'email', 'email_address', 'contact-email')));
     } elseif ($col === 'bbd_phone') {
-        $out = bbd_cf7_first_meta($post_id, array('tel', 'phone', 'your-phone', 'phone_number', 'contact-phone'));
-        echo esc_html($out);
+        echo esc_html(bbd_cf7_first_meta($post_id, array('tel', 'phone', 'your-phone', 'phone_number', 'contact-phone')));
     } elseif ($col === 'bbd_form') {
         echo esc_html(get_post_meta($post_id, '_form_title', true));
     }
 }, 10, 2);
 
-/** Export page */
+/**
+ * Export page
+ */
 function bbd_cf7_export_page()
 {
     if (!current_user_can('manage_options')) return; ?>
@@ -296,17 +324,19 @@ function bbd_cf7_export_page()
     </div>
 <?php }
 
-/** CSV download */
+/**
+ * CSV download handler
+ */
 add_action('admin_post_bbd_cf7_export', function () {
     if (!current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'buzzboost-cf7-admin'));
     if (!isset($_POST['bbd_cf7_export_nonce']) || !wp_verify_nonce($_POST['bbd_cf7_export_nonce'], 'bbd_cf7_export_nonce')) {
         wp_die(__('Invalid request.', 'buzzboost-cf7-admin'));
     }
 
-    $from       = isset($_POST['from']) ? sanitize_text_field($_POST['from']) : '';
-    $to         = isset($_POST['to']) ? sanitize_text_field($_POST['to']) : '';
+    $from       = isset($_POST['from']) ? sanitize_text_field(wp_unslash($_POST['from'])) : '';
+    $to         = isset($_POST['to']) ? sanitize_text_field(wp_unslash($_POST['to'])) : '';
     $limit      = isset($_POST['limit']) ? max(1, (int) $_POST['limit']) : 1000;
-    $form_title = isset($_POST['form_title']) ? sanitize_text_field($_POST['form_title']) : '';
+    $form_title = isset($_POST['form_title']) ? sanitize_text_field(wp_unslash($_POST['form_title'])) : '';
 
     $meta_query = array();
     if ($form_title !== '') {
@@ -339,7 +369,7 @@ add_action('admin_post_bbd_cf7_export', function () {
         exit;
     }
 
-    // Clean all output buffers before headers (other plugins/themes may echo)
+    // Clean all output buffers before headers
     if (function_exists('ob_get_level')) {
         while (ob_get_level()) {
             ob_end_clean();
@@ -348,7 +378,7 @@ add_action('admin_post_bbd_cf7_export', function () {
 
     nocache_headers();
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=cf7-submissions-' . date('Ymd-His') . '.csv');
+    header('Content-Disposition: attachment; filename=cf7-submissions-' . gmdate('Ymd-His') . '.csv');
 
     $out = fopen('php://output', 'w');
 
@@ -357,7 +387,7 @@ add_action('admin_post_bbd_cf7_export', function () {
     foreach ($ids as $pid) {
         $meta = get_post_meta($pid);
         foreach ($meta as $k => $vals) {
-            if ($k[0] !== '_') continue;
+            if (!is_string($k) || $k === '' || $k[0] !== '_') continue;
             if ($k === '_form_title') continue;
             if (strpos($k, '_file_') === 0) continue; // skip file paths
             $all_keys[$k] = true;
@@ -372,7 +402,11 @@ add_action('admin_post_bbd_cf7_export', function () {
     foreach ($ids as $post_id) {
         $row = array();
         $row[] = $post_id;
-        $row[] = get_the_date('Y-m-d H:i:s', $post_id);
+
+        // Get local time string safely
+        $post_obj = get_post($post_id);
+        $row[] = $post_obj ? $post_obj->post_date : '';
+
         $row[] = get_post_meta($post_id, '_form_title', true);
 
         $meta = get_post_meta($post_id);
@@ -394,7 +428,9 @@ add_action('admin_post_bbd_cf7_export', function () {
     exit;
 });
 
-/** Informational notice if export found nothing */
+/**
+ * Notice when export found nothing
+ */
 add_action('admin_notices', function () {
     if (!current_user_can('manage_options')) return;
     if (isset($_GET['bbd_export']) && $_GET['bbd_export'] === 'empty') {
@@ -404,11 +440,13 @@ add_action('admin_notices', function () {
     }
 });
 
-/** Plugins screen quick links: View Submissions / Export CSV */
+/**
+ * Plugins screen quick links
+ */
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), function ($links) {
     $view_url   = admin_url('edit.php?post_type=cf7_submission');
     $export_url = admin_url('edit.php?post_type=cf7_submission&page=bbd-cf7-export');
-    array_unshift($links, '<a href="' . esc_url($view_url) . '">View Submissions</a>');
-    $links[] = '<a href="' . esc_url($export_url) . '">Export CSV</a>';
+    array_unshift($links, '<a href="' . esc_url($view_url) . '">' . esc_html__('View Submissions', 'buzzboost-cf7-admin') . '</a>');
+    $links[] = '<a href="' . esc_url($export_url) . '">' . esc_html__('Export CSV', 'buzzboost-cf7-admin') . '</a>';
     return $links;
 });
