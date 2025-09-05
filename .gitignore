@@ -1,0 +1,13 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/settings.json
+
+# Archives
+*.zip
+
+# Node/composer (future-proof)
+node_modules/
+vendor/
